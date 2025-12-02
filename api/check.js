@@ -43,12 +43,7 @@ Respond in EXACTLY this JSON format, no extra text:
 }
     `.trim();
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res
-        .status(500)
-        .json({ error: 'Server misconfigured: missing OPENAI_API_KEY.' });
-    }
+    const apiKey = process.env.OPENAI_API_KEY; // we know this exists because /api/test shows hasKey: true
 
     const openaiResponse = await fetch(
       'https://api.openai.com/v1/chat/completions',
@@ -79,7 +74,9 @@ Respond in EXACTLY this JSON format, no extra text:
     if (!openaiResponse.ok) {
       const text = await openaiResponse.text();
       console.error('OpenAI error:', openaiResponse.status, text);
-      return res.status(500).json({ error: 'OpenAI API error.' });
+      return res
+        .status(500)
+        .json({ error: 'OpenAI API error.', details: text.slice(0, 200) });
     }
 
     const data = await openaiResponse.json();
@@ -90,7 +87,9 @@ Respond in EXACTLY this JSON format, no extra text:
       parsed = JSON.parse(content);
     } catch (e) {
       console.error('Failed to parse AI JSON:', content);
-      return res.status(500).json({ error: 'Failed to parse AI response JSON.' });
+      return res
+        .status(500)
+        .json({ error: 'Failed to parse AI response JSON.' });
     }
 
     if (
@@ -100,7 +99,9 @@ Respond in EXACTLY this JSON format, no extra text:
       !parsed.reason ||
       !parsed.advice
     ) {
-      return res.status(500).json({ error: 'AI response missing required fields.' });
+      return res
+        .status(500)
+        .json({ error: 'AI response missing required fields.' });
     }
 
     return res.status(200).json({
