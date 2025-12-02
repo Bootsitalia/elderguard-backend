@@ -1,5 +1,5 @@
 // api/check.js
-// Vercel serverless function for scam analysis
+// Production scam analysis backend using OpenAI gpt-4.1-mini
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -10,12 +10,12 @@ export default async function handler(req, res) {
     const { message, sender } = req.body || {};
 
     if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Missing "message" in body.' });
+      return res.status(400).json({ error: 'Missing \"message\" in body.' });
     }
 
     const senderText =
       sender && typeof sender === 'string' && sender.trim().length > 0
-        ? `Sender: "${sender.trim()}".`
+        ? `Sender: \"${sender.trim()}\".`
         : 'Sender: not provided.';
 
     const prompt = `
@@ -32,8 +32,9 @@ You must:
 - Consider the content AND the sender.
 - Look for signs of phishing, impersonation of banks, PayPal, Amazon, IRS, tech support, or family.
 - Be conservative (better to call something risky than safe).
+- Explain things in very simple language suitable for a senior.
 
-Respond in EXACTLY this JSON format, no extra text:
+Respond in EXACTLY this JSON format, and only JSON, no extra text:
 
 {
   "risk": "high" | "medium" | "low",
@@ -43,7 +44,13 @@ Respond in EXACTLY this JSON format, no extra text:
 }
     `.trim();
 
-    const apiKey = process.env.OPENAI_API_KEY; // we know this exists because /api/test shows hasKey: true
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    // If for some reason the key isn't there, fail clearly.
+    if (!apiKey) {
+      console.error('OPENAI_API_KEY is missing in environment.');
+      return res.status(500).json({ error: 'Server configuration error.' });
+    }
 
     const openaiResponse = await fetch(
       'https://api.openai.com/v1/chat/completions',
@@ -59,7 +66,7 @@ Respond in EXACTLY this JSON format, no extra text:
             {
               role: 'system',
               content:
-                'You are a scam-detection assistant helping seniors avoid fraud. Always be cautious.',
+                'You are a scam-detection assistant helping seniors avoid fraud. Always err on the side of caution.',
             },
             {
               role: 'user',
@@ -74,9 +81,10 @@ Respond in EXACTLY this JSON format, no extra text:
     if (!openaiResponse.ok) {
       const text = await openaiResponse.text();
       console.error('OpenAI error:', openaiResponse.status, text);
-      return res
-        .status(500)
-        .json({ error: 'OpenAI API error.', details: text.slice(0, 200) });
+      return res.status(500).json({
+        error: 'OpenAI API error.',
+        details: text.slice(0, 200),
+      });
     }
 
     const data = await openaiResponse.json();
@@ -99,6 +107,7 @@ Respond in EXACTLY this JSON format, no extra text:
       !parsed.reason ||
       !parsed.advice
     ) {
+      console.error('AI response missing fields:', parsed);
       return res
         .status(500)
         .json({ error: 'AI response missing required fields.' });
